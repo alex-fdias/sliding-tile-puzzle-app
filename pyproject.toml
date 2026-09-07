@@ -1,0 +1,36 @@
+[build-system]
+requires = ["hatchling >= 1.26"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/sliding_tile_puzzle_app_amfd"]
+
+[tool.hatch.build.targets.sdist]
+exclude = [
+  "*.pdf",
+]
+
+[project]
+name = "sliding-tile-puzzle-app-amfd"
+version = "0.9.0"
+authors = [
+  { name="AMFD", email="amfd@email.com" },
+]
+description = "Sliding Tile Puzzle Application using PyQt"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "matplotlib==3.11.1",
+    "numpy==2.5.1",
+	"PyQt6==6.11.0",
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+license = "GPL-3.0-only"
+license-files = ["LICEN[CS]E*"]
+
+[project.urls]
+Homepage = "https://github.com/alex-fdias/sliding-tile-puzzle-app"
+Issues = "https://github.com/alex-fdias/sliding-tile-puzzle-app/issues"
