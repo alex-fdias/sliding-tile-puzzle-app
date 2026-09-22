@@ -15,7 +15,9 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMainWindow,
+    QMessageBox,
     QPushButton,
+    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
@@ -1663,9 +1665,6 @@ class SlidingTilePuzzleGUI(QMainWindow):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.size = 3
-        self.puzzle = Puzzle(size=self.size)
-
         self.button_new = QPushButton(text="Generate new")
         self.button_reset = QPushButton(text="Reset moves")
         self.button_solve = QPushButton(text="Solve current")
@@ -1673,15 +1672,28 @@ class SlidingTilePuzzleGUI(QMainWindow):
 
         self.checkbox_wraparound = QCheckBox(text="Wraparound")
 
+        label_puzzle_size = QLabel()
+        label_puzzle_size.setStyleSheet('font-weight: bold')
+        label_puzzle_size.setText('Puzzle size: ')
+        self.spinbox_size_select = QSpinBox()
+        self.spinbox_size_select.setRange(3, 20)
+        self.spinbox_size_select.setValue(3)
+        self.button_size_set = QPushButton(text='Set')
+
+        layout_puzzle_size = QHBoxLayout()
+        layout_puzzle_size.addWidget(self.spinbox_size_select)
+        layout_puzzle_size.addWidget(self.button_size_set)
+        layout_puzzle_size.setAlignment(Qt.AlignmentFlag.AlignTop)
+
         # keyboard focus settings
-        buttons_checkbox_widgets = (
+        widgets_buttons_checkbox = (
             self.button_new,
             self.button_reset,
             self.button_solve,
             self.button_solve_inf,
-            self.checkbox_wraparound
+            self.checkbox_wraparound,
         )
-        for widget in buttons_checkbox_widgets:
+        for widget in widgets_buttons_checkbox:
             widget.setFocusPolicy(
                 # remove keyboard/tab and mouse click focus/navigation through
                 # bitwise operations (clear the two least significant bits of
@@ -1691,9 +1703,19 @@ class SlidingTilePuzzleGUI(QMainWindow):
                 widget.focusPolicy() & ~Qt.FocusPolicy.TabFocus
                 & ~Qt.FocusPolicy.ClickFocus
             )
+        self.button_size_set.setFocusPolicy(
+            widget.focusPolicy() & ~Qt.FocusPolicy.TabFocus
+            & ~Qt.FocusPolicy.ClickFocus
+        )
+        self.spinbox_size_select.setFocusPolicy(
+            widget.focusPolicy() & ~Qt.FocusPolicy.TabFocus
+            & ~Qt.FocusPolicy.ClickFocus
+        )
 
         self.keys_enabled = False  # respond to (arrow) keyboard key presses
+        self.solving = False
         self.solve_infinite = False
+        self.changing_puzzle_size = False
 
         # review/make diagrams: Git
         # understand/learn: QPixmap
@@ -1702,19 +1724,7 @@ class SlidingTilePuzzleGUI(QMainWindow):
         #     -> copy
         # https://stackoverflow.com/questions/10307860/what-is-the-difference-between-qimage-and-qpixmap
 
-        self.img = PuzzleImage(
-            self.size,
-            os.path.join(
-                os.path.dirname(__file__),
-                'images',
-                'pexels-mavihnt-36752495_reduced.jpg',
-            )
-            # files("sliding_tile_puzzle").joinpath(
-            #     'images',
-            #     'pexels-mavihnt-36752495_reduced.jpg',
-            # )
-        )
-
+        # horizontal and vertical spacing of the QGridLayout widgets
         h_spacing = 1
         v_spacing = 1
 
@@ -1735,27 +1745,6 @@ class SlidingTilePuzzleGUI(QMainWindow):
         self.layoutRGB.setHorizontalSpacing(h_spacing)
         self.layoutRGB.setVerticalSpacing(v_spacing)
         self.layoutRGB.setAlignment(Qt.AlignmentFlag.AlignTop)
-
-        self.cell_height = self.img.height // self.puzzle.size
-        self.cell_width = self.img.width // self.puzzle.size
-        for row in range(self.puzzle.size):
-            for col in range(self.puzzle.size):
-                if (
-                    row != self.puzzle.missingTileRow
-                    or col != self.puzzle.missingTileCol
-                ):
-                    pixmapCell = self.img.pixmap.copy(
-                        self.img.width//self.puzzle.size*col,
-                        self.img.height//self.puzzle.size*row,
-                        self.cell_width,
-                        self.cell_height
-                    )
-                else:
-                    pixmapCell = QPixmap(self.cell_width, self.cell_height)
-                    pixmapCell.fill(QColor('yellow'))
-                label = QLabel()
-                label.setPixmap(pixmapCell)
-                self.layoutSolution.addWidget(label, row, col)
 
         labelPuzzleNumTxt = QLabel()
         labelPuzzleNumTxt.setStyleSheet('font-weight: bold')
@@ -1792,9 +1781,11 @@ class SlidingTilePuzzleGUI(QMainWindow):
         layoutButtons = QVBoxLayout()
         layoutButtons.setAlignment(Qt.AlignmentFlag.AlignTop)
 
-        for widget in buttons_checkbox_widgets:
+        for widget in widgets_buttons_checkbox:
             layoutButtons.addWidget(widget)
 
+        layoutButtons.addWidget(label_puzzle_size)
+        layoutButtons.addLayout(layout_puzzle_size)
         layoutButtons.addWidget(labelPuzzleNumTxt)
         layoutButtons.addWidget(self.puzzle_num)
         layoutButtons.addWidget(labelMovesText)
@@ -1811,6 +1802,15 @@ class SlidingTilePuzzleGUI(QMainWindow):
         widgetApp = QWidget()
         widgetApp.setLayout(layoutApp)
         self.setCentralWidget(widgetApp)
+
+
+        self.size = self.spinbox_size_select.value()
+        self.puzzle = Puzzle(size=self.size)
+        self.load_puzzle_image()
+        self.calc_puzzle_cell_dims()
+        self.drawPuzzleSolution()
+
+        print(f'[GUI Thread] Puzzle size is {self.size}')
 
         self.thread_puzzle = ThreadPuzzle(self.puzzle)
         self.thread_puzzle.update_solvable.connect(
@@ -1839,6 +1839,7 @@ class SlidingTilePuzzleGUI(QMainWindow):
         self.button_solve_inf.clicked.connect(
             self.solve_puzzle_inf
         )
+        self.button_size_set.clicked.connect(self.change_puzzle_size)
 
         self.thread_puzzle.start()
 
@@ -1849,6 +1850,20 @@ class SlidingTilePuzzleGUI(QMainWindow):
 
         self.plot_figs = None
         self.plot_axs = None
+
+
+        self.size_change_confirmation_dialog = QMessageBox(
+            QMessageBox.Icon.Question,
+            'Puzzle size change confirmation',
+            (
+                'Do you really want to change the puzzle size? '
+                'All progress will be reset.'
+            ),
+            (
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            ),
+        )
+        self.size_change_confirmation_dialog.setDefaultButton(QMessageBox.StandardButton.No)
 
         self.setWindowTitle('Sliding Tile Puzzle')
 
@@ -1868,6 +1883,7 @@ class SlidingTilePuzzleGUI(QMainWindow):
         self.resetMovesHistory()
 
     def solve_puzzle(self, infinite=False):
+        self.solving = True
         # disable buttons
         self.button_new.setDisabled(True)
         self.button_reset.setDisabled(True)
@@ -1925,6 +1941,10 @@ class SlidingTilePuzzleGUI(QMainWindow):
         self.button_solve.clicked.connect(self.solve_puzzle)
         self.button_solve.setText('Solve')
         self.enable_buttons()
+        self.solving = False
+        
+        if self.changing_puzzle_size:
+            self.change_puzzle_size_finish()
 
     def solve_stopped(self):
         if not self.solve_infinite:
@@ -1934,6 +1954,10 @@ class SlidingTilePuzzleGUI(QMainWindow):
             self.solve_infinite = False
 
         self.enable_buttons()
+        self.solving = False
+
+        if self.changing_puzzle_size:
+            self.change_puzzle_size_finish()
 
     def enable_buttons(self):
         self.button_new.setDisabled(False)
@@ -2143,6 +2167,111 @@ class SlidingTilePuzzleGUI(QMainWindow):
             )
 
             print(len(solutionsHistory), newSolutions)
+
+    def change_puzzle_size(self):
+        puzzle_size_new = self.spinbox_size_select.value()
+        if puzzle_size_new == self.size:
+            return
+
+        answer = self.size_change_confirmation_dialog.exec()
+        if answer == QMessageBox.StandardButton.No:
+            self.spinbox_size_select.setValue(self.size)
+        elif answer == QMessageBox.StandardButton.Yes:
+            self.changing_puzzle_size = True
+            # save value as attribute for method change_puzzle_size_finish
+            self.puzzle_size_new = puzzle_size_new
+
+            # if solving a puzzle, stop solving
+            if self.solving:
+                self.stop_solving()
+            else:
+                self.change_puzzle_size_finish()
+
+    def change_puzzle_size_finish(self):
+        # close figures from solving puzzles
+        if self.plot_figs:
+            for fig in self.plot_figs:
+                plt.close(fig)
+
+        # at this point:
+        # self.size - old puzzle size
+        # self.puzzle_size_new - new puzzle size
+
+        # clear puzzle solution for the old puzzle size
+        self.clear_solution_puzzle_heatmap(previous_size=self.size)
+
+        # update puzzle size variable
+        self.size = self.puzzle_size_new
+
+        # create a new Puzzle object for the new puzzle size
+        # update cell dimensions for the new puzzle size
+        # draw puzzle solution for the new puzzle size
+        self.puzzle = Puzzle(size=self.puzzle_size_new)
+        self.calc_puzzle_cell_dims()
+        self.drawPuzzleSolution()
+
+        # update the ThreadPuzzle object with the new Puzzle object
+        # generate a new puzzle (and plot it)
+        self.thread_puzzle.puzzle = self.puzzle
+        self.thread_puzzle.new_puzzle()
+
+        # finish changing puzzle size
+        del self.puzzle_size_new
+        self.changing_puzzle_size = False
+
+        print(f'[GUI Thread] Finished changing puzzle size to {self.size}')
+
+    def load_puzzle_image(self):
+        self.img = PuzzleImage(
+            self.size,
+            os.path.join(
+                os.path.dirname(__file__),
+                'images',
+                'pexels-mavihnt-36752495_reduced.jpg',
+            )
+            # files("sliding_tile_puzzle").joinpath(
+            #     'images',
+            #     'pexels-mavihnt-36752495_reduced.jpg',
+            # )
+        )
+
+    def clear_solution_puzzle_heatmap(self, previous_size):
+        layouts_to_clear = (
+            self.layoutSolution,
+            self.layoutPuzzle,
+            self.layoutRGB,
+            )
+
+        for layout in layouts_to_clear:
+            for row in range(previous_size):
+                for col in range(previous_size):
+                    layout_item = layout.itemAtPosition(row, col)
+                    if layout_item and layout_item.widget():
+                        layout.removeWidget(layout_item.widget())
+
+    def calc_puzzle_cell_dims(self):
+        self.cell_height = self.img.height // self.size
+        self.cell_width = self.img.width // self.size
+
+    def drawPuzzleSolution(self):
+        for row in range(self.puzzle.size):
+            for col in range(self.puzzle.size):
+                if (
+                    row != self.puzzle.missingTileRow
+                    or col != self.puzzle.missingTileCol
+                ):
+                    pixmapCell = self.img.pixmap.copy(
+                        self.img.width//self.puzzle.size*col,
+                        self.img.height//self.puzzle.size*row,
+                        self.cell_width,
+                        self.cell_height
+                    )
+                else:
+                    pixmapCell = QPixmap(self.cell_width, self.cell_height)
+                    pixmapCell.fill(QColor('yellow'))
+                label = QLabel()
+                label.setPixmap(pixmapCell)
+                self.layoutSolution.addWidget(label, row, col)
 
     def drawPuzzleRGBMap(self):
         cell_positionsRows = self.puzzle.tile_pos // self.puzzle.size
