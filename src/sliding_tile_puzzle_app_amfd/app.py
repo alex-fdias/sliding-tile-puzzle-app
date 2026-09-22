@@ -2192,6 +2192,7 @@ class SlidingTilePuzzleGUI(QMainWindow):
         if self.plot_figs:
             for fig in self.plot_figs:
                 plt.close(fig)
+            self.plot_figs = None
 
         # at this point:
         # self.size - old puzzle size
