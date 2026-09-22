@@ -1803,7 +1803,6 @@ class SlidingTilePuzzleGUI(QMainWindow):
         widgetApp.setLayout(layoutApp)
         self.setCentralWidget(widgetApp)
 
-
         self.size = self.spinbox_size_select.value()
         self.puzzle = Puzzle(size=self.size)
         self.load_puzzle_image()
@@ -1851,7 +1850,6 @@ class SlidingTilePuzzleGUI(QMainWindow):
         self.plot_figs = None
         self.plot_axs = None
 
-
         self.size_change_confirmation_dialog = QMessageBox(
             QMessageBox.Icon.Question,
             'Puzzle size change confirmation',
@@ -1863,7 +1861,9 @@ class SlidingTilePuzzleGUI(QMainWindow):
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
             ),
         )
-        self.size_change_confirmation_dialog.setDefaultButton(QMessageBox.StandardButton.No)
+        self.size_change_confirmation_dialog.setDefaultButton(
+            QMessageBox.StandardButton.No
+        )
 
         self.setWindowTitle('Sliding Tile Puzzle')
 
@@ -1942,7 +1942,7 @@ class SlidingTilePuzzleGUI(QMainWindow):
         self.button_solve.setText('Solve')
         self.enable_buttons()
         self.solving = False
-        
+
         if self.changing_puzzle_size:
             self.change_puzzle_size_finish()
 
@@ -2202,6 +2202,7 @@ class SlidingTilePuzzleGUI(QMainWindow):
         self.clear_solution_puzzle_heatmap(previous_size=self.size)
 
         # update puzzle size variable
+        print(f'[GUI Thread] Changing puzzle size to {self.size}')
         self.size = self.puzzle_size_new
 
         # create a new Puzzle object for the new puzzle size
@@ -2241,7 +2242,7 @@ class SlidingTilePuzzleGUI(QMainWindow):
             self.layoutSolution,
             self.layoutPuzzle,
             self.layoutRGB,
-            )
+        )
 
         for layout in layouts_to_clear:
             for row in range(previous_size):
